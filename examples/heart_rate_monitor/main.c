@@ -287,6 +287,21 @@ uint32_t ble_cfg_set(uint8_t conn_cfg_tag)
         return error_code;
     }
 
+#if NRF_SD_BLE_API >= 6
+    memset(&ble_cfg, 0, sizeof(ble_cfg));
+    ble_cfg.conn_cfg.conn_cfg_tag                     = conn_cfg_tag;
+    ble_cfg.conn_cfg.params.gap_conn_cfg.conn_count   = 1;
+    ble_cfg.conn_cfg.params.gap_conn_cfg.event_length = BLE_GAP_EVENT_LENGTH_CODED_PHY_MIN;
+
+    error_code = sd_ble_cfg_set(m_adapter, BLE_CONN_CFG_GAP, &ble_cfg, ram_start);
+    if (error_code != NRF_SUCCESS)
+    {
+        printf("sd_ble_cfg_set() failed when attempting to set BLE_CONN_CFG_GAP. Error code: 0x%02X\n", error_code);
+        fflush(stdout);
+        return error_code;
+    }
+#endif
+
     return NRF_SUCCESS;
 }
 #endif
@@ -330,18 +345,18 @@ static uint32_t advertisement_data_set()
 #endif
 #if NRF_SD_BLE_API >= 6
     ble_gap_adv_properties_t adv_properties;
-    adv_properties.type             = BLE_GAP_ADV_TYPE_CONNECTABLE_SCANNABLE_UNDIRECTED;
+    adv_properties.type             = BLE_GAP_ADV_TYPE_EXTENDED_CONNECTABLE_NONSCANNABLE_UNDIRECTED;
     adv_properties.anonymous        = 0;
     adv_properties.include_tx_power = 0;
 
     m_adv_params.properties         = adv_properties;
     m_adv_params.filter_policy      = BLE_GAP_ADV_FP_ANY;
-    m_adv_params.duration           = BLE_GAP_ADV_TIMEOUT_GENERAL_UNLIMITED;
+    m_adv_params.duration           = BLE_GAP_ADV_TIMEOUT_LIMITED_MAX;
     m_adv_params.p_peer_addr        = NULL;
     m_adv_params.interval           = ADVERTISING_INTERVAL_40_MS;
     m_adv_params.max_adv_evts       = 0;
-    m_adv_params.primary_phy        = BLE_GAP_PHY_AUTO;
-    m_adv_params.secondary_phy      = BLE_GAP_PHY_AUTO;
+    m_adv_params.primary_phy        = BLE_GAP_PHY_CODED;
+    m_adv_params.secondary_phy      = BLE_GAP_PHY_CODED;
     m_adv_params.channel_mask[0]    = 0;
     m_adv_params.channel_mask[1]    = 0;
     m_adv_params.channel_mask[2]    = 0;
