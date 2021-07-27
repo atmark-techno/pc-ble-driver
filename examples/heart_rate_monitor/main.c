@@ -417,6 +417,13 @@ static uint32_t advertising_start()
 #elif NRF_SD_BLE_API == 5
     error_code = sd_ble_gap_adv_start(m_adapter, &adv_params, m_config_id);
 #elif NRF_SD_BLE_API >= 6
+    error_code = sd_ble_gap_tx_power_set(m_adapter, BLE_GAP_TX_POWER_ROLE_ADV, m_adv_handle, 8);
+    if (error_code != NRF_SUCCESS)
+    {
+        printf("Failed to set tx_power as advertiser. Error code: 0x%02X\n", error_code);
+        fflush(stdout);
+        return error_code;
+    }
     error_code = sd_ble_gap_adv_start(m_adapter, m_adv_handle, m_config_id);
 #endif
 
@@ -637,6 +644,15 @@ static void ble_evt_dispatch(adapter_t * adapter, ble_evt_t * p_ble_evt)
             m_connection_handle = p_ble_evt->evt.gap_evt.conn_handle;
             printf("Connected, connection handle 0x%04X\n", m_connection_handle);
             fflush(stdout);
+#if NRF_SD_BLE_API >= 6
+            err_code = sd_ble_gap_tx_power_set(m_adapter, BLE_GAP_TX_POWER_ROLE_CONN, m_connection_handle, 8);
+            if (err_code != NRF_SUCCESS)
+            {
+                printf("Failed to set tx_power as connection. Error code: 0x%02X\n", err_code);
+                fflush(stdout);
+                return;
+            }
+#endif
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
