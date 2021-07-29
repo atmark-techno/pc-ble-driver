@@ -126,14 +126,14 @@ static uint32_t    m_config_id                  = 1;
 #endif
 
 #if NRF_SD_BLE_API >= 6
-static uint8_t     mp_data[100]                 = { 0 };
+static uint8_t     mp_data[BLE_GAP_SCAN_BUFFER_EXTENDED_MIN]                 = { 0 };
 static ble_data_t  m_adv_report_buffer;
 #endif
 
 static const ble_gap_scan_params_t m_scan_param =
 {
 #if NRF_SD_BLE_API >= 6
-    0,                       // Set if accept extended advertising packetets.
+    1,                       // Set if accept extended advertising packetets.
     0,                       // Set if report inomplete reports.
 #endif
     0,                       // Set if active scanning.
@@ -142,7 +142,7 @@ static const ble_gap_scan_params_t m_scan_param =
 #endif
 #if NRF_SD_BLE_API >= 6
     BLE_GAP_SCAN_FP_ACCEPT_ALL,
-    BLE_GAP_PHY_1MBPS,
+    BLE_GAP_PHY_CODED,
 #endif
 #if NRF_SD_BLE_API == 2
     NULL,                    // Set white-list.
@@ -451,6 +451,21 @@ static uint32_t ble_cfg_set(uint8_t conn_cfg_tag)
         fflush(stdout);
         return error_code;
     }
+
+#if NRF_SD_BLE_API >= 6
+    memset(&ble_cfg, 0, sizeof(ble_cfg));
+    ble_cfg.conn_cfg.conn_cfg_tag                     = conn_cfg_tag;
+    ble_cfg.conn_cfg.params.gap_conn_cfg.conn_count   = 1;
+    ble_cfg.conn_cfg.params.gap_conn_cfg.event_length = BLE_GAP_EVENT_LENGTH_CODED_PHY_MIN;
+
+    error_code = sd_ble_cfg_set(m_adapter, BLE_CONN_CFG_GAP, &ble_cfg, ram_start);
+    if (error_code != NRF_SUCCESS)
+    {
+        printf("sd_ble_cfg_set() failed when attempting to set BLE_CONN_CFG_GAP. Error code: 0x%02X\n", error_code);
+        fflush(stdout);
+        return error_code;
+    }
+#endif
 
     return NRF_SUCCESS;
 }
