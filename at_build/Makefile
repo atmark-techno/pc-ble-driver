@@ -1,5 +1,7 @@
 curdir = $(shell pwd)
 CROSS_COMPILE =
+TARGETS = heart_rate_monitor \
+		  heart_rate_collector
 
 ifeq ($(CROSS_COMPILE), arm-linux-gnueabihf-)
 	CPP = /usr/bin/arm-linux-gnueabihf-g++
@@ -19,7 +21,7 @@ examples:
 		mkdir examples; \
 	fi
 
-build: heart_rate_monitor heart_rate_collector
+build: $(TARGETS)
 
 heart_rate_monitor: objects/libnrf-ble-driver-sd_api_v6.a examples/monitor.c.o
 	$(CPP) -g examples/monitor.c.o -o heart_rate_monitor objects/libnrf-ble-driver-sd_api_v6.a -lpthread -ludev
@@ -38,4 +40,7 @@ examples/collector.c.o:
 	$(MAKE) CROSS_COMPILE=$(CROSS_COMPILE) -f heart_rate_collector.make build
 
 clean:
-	-rm -rf heart_rate_monitor heart_rate_collector examples/* objects/*
+	-rm -rf $(TARGETS) examples/*
+
+dist-clean:
+	-rm -rf $(TARGETS) examples/* objects/*
