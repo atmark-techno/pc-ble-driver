@@ -1,7 +1,9 @@
 curdir = $(shell pwd)
 CROSS_COMPILE =
 TARGETS = heart_rate_monitor \
-		  heart_rate_collector
+		  heart_rate_collector \
+		  test_peripheral \
+		  test_central
 
 ifeq ($(CROSS_COMPILE), arm-linux-gnueabihf-)
 	CPP = /usr/bin/arm-linux-gnueabihf-g++
@@ -29,6 +31,12 @@ heart_rate_monitor: objects/libnrf-ble-driver-sd_api_v6.a examples/monitor.c.o
 heart_rate_collector: objects/libnrf-ble-driver-sd_api_v6.a examples/collector.c.o
 	$(CPP) -g examples/collector.c.o -o heart_rate_collector objects/libnrf-ble-driver-sd_api_v6.a -lpthread -ludev
 
+test_peripheral: objects/libnrf-ble-driver-sd_api_v6.a examples/test_peripheral.c.o
+	$(CPP) -g examples/test_peripheral.c.o -o test_peripheral objects/libnrf-ble-driver-sd_api_v6.a -lpthread -ludev
+
+test_central: objects/libnrf-ble-driver-sd_api_v6.a examples/test_central.c.o
+	$(CPP) -g examples/test_central.c.o -o test_central objects/libnrf-ble-driver-sd_api_v6.a -lpthread -ludev
+
 objects/libnrf-ble-driver-sd_api_v6.a:
 	$(MAKE) CROSS_COMPILE=$(CROSS_COMPILE) -f src.make build
 	$(MAKE) -f libnrf-ble-driver.make build
@@ -38,6 +46,12 @@ examples/monitor.c.o:
 
 examples/collector.c.o:
 	$(MAKE) CROSS_COMPILE=$(CROSS_COMPILE) -f heart_rate_collector.make build
+
+examples/test_peripheral.c.o:
+	$(MAKE) CROSS_COMPILE=$(CROSS_COMPILE) -f test_peripheral.make build
+
+examples/test_central.c.o:
+	$(MAKE) CROSS_COMPILE=$(CROSS_COMPILE) -f test_central.make build
 
 clean:
 	-rm -rf $(TARGETS) examples/*
