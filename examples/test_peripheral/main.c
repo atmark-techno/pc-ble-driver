@@ -72,6 +72,7 @@
 #include <windows.h>
 #else
 #include <unistd.h>
+#include <getopt.h>
 #define Sleep(x) usleep((x)*1000)
 #endif
 
@@ -108,7 +109,7 @@
 #define HEART_RATE_LIMIT    190
 
 #define BUFFER_SIZE 30           /**< Sufficiently large buffer for the advertising data.  */
-#define DEVICE_NAME "Nordic_HRM" /**< Name device advertises as over Bluetooth. */
+#define DEVICE_NAME "test_armadillo" /**< Name device advertises as over Bluetooth. */
 
 #ifndef GATT_MTU_SIZE_DEFAULT
 #define GATT_MTU_SIZE_DEFAULT BLE_GATT_ATT_MTU_DEFAULT
@@ -123,6 +124,7 @@ static uint8_t                  m_heart_rate                    = HEART_RATE_BAS
 static bool                     m_send_notifications            = false;
 static bool                     m_advertisement_timed_out       = false;
 static adapter_t *              m_adapter                       = NULL;
+static uint8_t                  m_selected_phy                  = BLE_GAP_PHY_CODED;
 
 #if NRF_SD_BLE_API >= 5
 static uint32_t                 m_config_id                     = 1;
@@ -355,8 +357,8 @@ static uint32_t advertisement_data_set()
     m_adv_params.p_peer_addr        = NULL;
     m_adv_params.interval           = ADVERTISING_INTERVAL_40_MS;
     m_adv_params.max_adv_evts       = 0;
-    m_adv_params.primary_phy        = BLE_GAP_PHY_CODED;
-    m_adv_params.secondary_phy      = BLE_GAP_PHY_CODED;
+    m_adv_params.primary_phy        = m_selected_phy;
+    m_adv_params.secondary_phy      = m_selected_phy;
     m_adv_params.channel_mask[0]    = 0;
     m_adv_params.channel_mask[1]    = 0;
     m_adv_params.channel_mask[2]    = 0;
@@ -780,10 +782,47 @@ int main(int argc, char * argv[])
     char *   serial_port = DEFAULT_UART_PORT_NAME;
     uint32_t baud_rate = DEFAULT_BAUD_RATE;
 
-    if (argc > 1)
+    const struct option longopts[] = {
+	    {"serial_port", optional_argument, NULL, 's'},
+	    {"phy", optional_argument, NULL, 'p'},
+	    {0, 0, 0, 0},
+    };
+    int opt, longindex;
+    while ((opt = getopt_long(argc, argv, "s::p::", longopts, &longindex)) != -1)
     {
-        serial_port = argv[1];
+		switch (opt)
+		{
+	    case 's':
+			if (optarg != NULL)
+			{
+				serial_port = optarg;
+			}
+			break;
+	    case 'p':
+			if (strcmp(optarg, "1m") == 0)
+			{
+				m_selected_phy = BLE_GAP_PHY_1MBPS;
+			}
+			else if (strcmp(optarg, "coded") == 0)
+			{
+				m_selected_phy = BLE_GAP_PHY_CODED;
+			}
+			break;
+	    default:
+	        break;
+		}
     }
+
+	switch (m_selected_phy)
+	{
+	case BLE_GAP_PHY_1MBPS:
+		printf("phy: 1M_PHY\n");
+		break;
+
+	case BLE_GAP_PHY_CODED:
+		printf("phy: CODED_PHY\n");
+		break;
+	}
 
     printf("Serial port used: %s\n", serial_port);
     printf("Baud rate used: %d\n", baud_rate);

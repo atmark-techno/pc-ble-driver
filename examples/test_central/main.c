@@ -61,6 +61,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <getopt.h>
 
 
 /** Definitions */
@@ -94,7 +95,7 @@ enum
 #define SLAVE_LATENCY                   0                                /**< Slave Latency in number of connection events. */
 #define CONNECTION_SUPERVISION_TIMEOUT  MSEC_TO_UNITS(4000, UNIT_10_MS)  /**< Determines supervision time-out in units of 10 milliseconds. */
 
-#define TARGET_DEV_NAME "Nordic_HRM" /**< Connect to a peripheral using a given advertising name here. */
+#define TARGET_DEV_NAME "test_armadillo" /**< Connect to a peripheral using a given advertising name here. */
 #define MAX_PEER_COUNT 1            /**< Maximum number of peer's application intends to manage. */
 
 #define BLE_UUID_HEART_RATE_SERVICE          0x180D /**< Heart Rate service UUID. */
@@ -119,6 +120,7 @@ static uint16_t    m_service_end_handle         = 0;
 static uint16_t    m_hrm_char_handle            = 0;
 static uint16_t    m_hrm_cccd_handle            = 0;
 static bool        m_connection_is_in_progress  = false;
+static bool        m_2m_phy_selected            = false;
 static adapter_t * m_adapter                    = NULL;
 
 #if NRF_SD_BLE_API >= 5
@@ -130,7 +132,7 @@ static uint8_t     mp_data[BLE_GAP_SCAN_BUFFER_EXTENDED_MIN]                 = {
 static ble_data_t  m_adv_report_buffer;
 #endif
 
-static const ble_gap_scan_params_t m_scan_param =
+static ble_gap_scan_params_t m_scan_param =
 {
 #if NRF_SD_BLE_API >= 6
     1,                       // Set if accept extended advertising packetets.
@@ -605,6 +607,25 @@ static uint32_t hrm_cccd_set(uint8_t value)
     return sd_ble_gattc_write(m_adapter, m_connection_handle, &write_params);
 }
 
+static void update_phy_to_2M(uint16_t conn_handle)
+{
+    uint32_t err_code;
+    ble_gap_phys_t const phys =
+    {
+        .rx_phys = BLE_GAP_PHY_2MBPS,
+        .tx_phys = BLE_GAP_PHY_2MBPS,
+    };
+    printf("Update PHY to 2M\n");
+    fflush(stdout);
+
+    err_code = sd_ble_gap_phy_update(m_adapter, conn_handle, &phys);
+    if (err_code != NRF_SUCCESS)
+    {
+        printf("Update PHY Failed, reason %d\n", err_code);
+        fflush(stdout);
+        return;
+    }
+}
 
 /** Event functions */
 
@@ -616,6 +637,11 @@ static uint32_t hrm_cccd_set(uint8_t value)
  */
 static void on_connected(const ble_gap_evt_t * const p_ble_gap_evt)
 {
+    if (m_2m_phy_selected)
+    {
+        update_phy_to_2M(p_ble_gap_evt->conn_handle);
+    }
+
     printf("Connection established\n");
     fflush(stdout);
 
@@ -989,7 +1015,14 @@ static void ble_evt_dispatch(adapter_t * adapter, ble_evt_t * p_ble_evt)
         case BLE_GAP_EVT_CONN_PARAM_UPDATE_REQUEST:
             on_conn_params_update_request(&(p_ble_evt->evt.gap_evt));
             break;
+        case BLE_GAP_EVT_PHY_UPDATE:
+            printf("Received BLE_GAP_EVT_PHY_UPDATE (RX:%d, TX:%d, status:%d)\n",
+                    p_ble_evt->evt.gap_evt.params.phy_update.rx_phy,
+                    p_ble_evt->evt.gap_evt.params.phy_update.tx_phy,
+                    p_ble_evt->evt.gap_evt.params.phy_update.status);
 
+            fflush(stdout);
+            break;
     #if NRF_SD_BLE_API >= 3
         case BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST:
             on_exchange_mtu_request(&(p_ble_evt->evt.gatts_evt));
@@ -1022,9 +1055,58 @@ int main(int argc, char * argv[])
     uint32_t baud_rate = DEFAULT_BAUD_RATE;
     uint8_t  cccd_value = 0;
 
-    if (argc > 1)
+    const struct option longopts[] = {
+        {"serial_port", optional_argument, NULL, 's'},
+        {"phy", optional_argument, NULL, 'p'},
+        {0, 0, 0, 0},
+    };
+    int opt, longindex;
+    while ((opt = getopt_long(argc, argv, "s::p::", longopts, &longindex)) != -1)
     {
-        serial_port = argv[1];
+        switch (opt)
+        {
+        case 's':
+            if (optarg != NULL)
+            {
+                serial_port = optarg;
+            }
+            break;
+        case 'p':
+            if (strcmp(optarg, "1m") == 0)
+            {
+                m_scan_param.scan_phys = BLE_GAP_PHY_1MBPS;
+            }
+            else if (strcmp(optarg, "2m") == 0)
+            {
+                m_scan_param.scan_phys = BLE_GAP_PHY_1MBPS;
+                m_2m_phy_selected = true;
+            }
+            else if (strcmp(optarg, "coded") == 0)
+            {
+                m_scan_param.scan_phys = BLE_GAP_PHY_CODED;
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
+    switch (m_scan_param.scan_phys)
+    {
+    case BLE_GAP_PHY_1MBPS:
+        if (m_2m_phy_selected)
+        {
+            printf("phy(scanning)  : 1M_PHY\nphy(connection): 2M_PHY\n");
+        }
+        else
+        {
+            printf("phy: 1M_PHY\n");
+        }
+        break;
+
+    case BLE_GAP_PHY_CODED:
+        printf("phy: CODED_PHY\n");
+        break;
     }
 
     printf("Serial port used: %s\n", serial_port);
