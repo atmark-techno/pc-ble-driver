@@ -171,18 +171,6 @@ static const ble_gap_conn_params_t m_connection_param =
 
 /** Global functions */
 
-/**@brief Function for handling error message events from sd_rpc.
- *
- * @param[in] adapter The transport adapter.
- * @param[in] code Error code that the error message is associated with.
- * @param[in] message The error message that the callback is associated with.
- */
-static void status_handler(adapter_t * adapter, sd_rpc_app_status_t code, const char * message)
-{
-    printf("Status: %d, message: %s\n", (uint32_t)code, message);
-    fflush(stdout);
-}
-
 /**@brief Function for handling the log message events from sd_rpc.
  *
  * @param[in] adapter The transport adapter.
@@ -494,10 +482,6 @@ static uint32_t scan_start()
     {
         printf("Scan start failed with error code: %d\n", error_code);
         fflush(stdout);
-    } else
-    {
-        printf("Scan started\n");
-        fflush(stdout);
     }
 
     return error_code;
@@ -514,9 +498,6 @@ static uint32_t service_discovery_start()
     uint32_t   err_code;
     uint16_t   start_handle = 0x01;
     ble_uuid_t srvc_uuid;
-
-    printf("Discovering primary services\n");
-    fflush(stdout);
 
     srvc_uuid.type = BLE_UUID_TYPE_BLE;
     srvc_uuid.uuid = BLE_UUID_HEART_RATE_SERVICE;
@@ -544,9 +525,6 @@ static uint32_t char_discovery_start()
 {
     ble_gattc_handle_range_t handle_range;
 
-    printf("Discovering characteristics\n");
-    fflush(stdout);
-
     handle_range.start_handle = m_service_start_handle;
     handle_range.end_handle = m_service_end_handle;
 
@@ -562,9 +540,6 @@ static uint32_t char_discovery_start()
 static uint32_t descr_discovery_start()
 {
     ble_gattc_handle_range_t handle_range;
-
-    printf("Discovering characteristic's descriptors\n");
-    fflush(stdout);
 
     if (m_hrm_char_handle == 0)
     {
@@ -587,9 +562,6 @@ static uint32_t hrm_cccd_set(uint8_t value)
 {
     ble_gattc_write_params_t write_params;
     uint8_t                  cccd_value[2] = {value, 0};
-
-    printf("Setting HRM CCCD\n");
-    fflush(stdout);
 
     if (m_hrm_cccd_handle == 0)
     {
@@ -641,9 +613,6 @@ static void on_connected(const ble_gap_evt_t * const p_ble_gap_evt)
     {
         update_phy_to_2M(p_ble_gap_evt->conn_handle);
     }
-
-    printf("Connection established\n");
-    fflush(stdout);
 
     m_connected_devices++;
     m_connection_handle         = p_ble_gap_evt->conn_handle;
@@ -699,11 +668,6 @@ static void on_adv_report(const ble_gap_evt_t * const p_ble_gap_evt)
         if (err_code != NRF_SUCCESS)
         {
             printf("Scan start failed with error code: %d\n", err_code);
-            fflush(stdout);
-        }
-        else
-        {
-            printf("Scan started\n");
             fflush(stdout);
         }
     }
@@ -1115,7 +1079,7 @@ int main(int argc, char * argv[])
 
     m_adapter =  adapter_init(serial_port, baud_rate);
     sd_rpc_log_handler_severity_filter_set(m_adapter, SD_RPC_LOG_INFO);
-    error_code = sd_rpc_open(m_adapter, status_handler, ble_evt_dispatch, log_handler);
+    error_code = sd_rpc_open(m_adapter, NULL, ble_evt_dispatch, log_handler);
 
     if (error_code != NRF_SUCCESS)
     {
