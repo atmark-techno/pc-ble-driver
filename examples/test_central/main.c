@@ -122,6 +122,7 @@ static uint16_t    m_hrm_char_handle            = 0;
 static uint16_t    m_hrm_cccd_handle            = 0;
 static bool        m_connection_is_in_progress  = false;
 static bool        m_2m_phy_selected            = false;
+static bool        is_connected                 = false;
 static adapter_t * m_adapter                    = NULL;
 static uint16_t    connection_handles[MAX_PEER_COUNT] = {0};
 static uint8_t     peer_addrs[MAX_PEER_COUNT][STRING_BUFFER_SIZE] = {0};
@@ -840,8 +841,7 @@ static void on_descriptor_discovery_response(const ble_gattc_evt_t * const p_ble
         if (p_ble_gattc_evt->params.desc_disc_rsp.descs[i].uuid.uuid == BLE_UUID_CCCD)
         {
             m_hrm_cccd_handle = p_ble_gattc_evt->params.desc_disc_rsp.descs[i].handle;
-            printf("Press enter to toggle notifications on the HRM characteristic\n");
-            fflush(stdout);
+            is_connected = true;
         }
     }
 }
@@ -1170,26 +1170,15 @@ int main(int argc, char * argv[])
     // Endlessly loop.
     for (;;)
     {
-        char c = (char)getchar();
-        if (c == 'q' || c == 'Q')
+        if (is_connected)
         {
-            error_code = sd_rpc_close(m_adapter);
-
-            if (error_code != NRF_SUCCESS)
+            for (uint8_t i = 0; i < 2; i++)
             {
-                printf("Failed to close nRF BLE Driver. Error code: 0x%02X\n", error_code);
-                fflush(stdout);
-                return error_code;
+                // Toggle notifications on the HRM characteristic every time user input is received.
+                cccd_value ^= BLE_CCCD_NOTIFY;
+                hrm_cccd_set(cccd_value);
             }
-
-            printf("Closed\n");
-            fflush(stdout);
-
-            return NRF_SUCCESS;
+            is_connected = false;
         }
-
-        // Toggle notifications on the HRM characteristic every time user input is received.
-        cccd_value ^= BLE_CCCD_NOTIFY;
-        hrm_cccd_set(cccd_value);
     }
 }
