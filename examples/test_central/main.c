@@ -96,7 +96,7 @@ enum
 #define CONNECTION_SUPERVISION_TIMEOUT  MSEC_TO_UNITS(4000, UNIT_10_MS)  /**< Determines supervision time-out in units of 10 milliseconds. */
 
 #define TARGET_DEV_NAME "test_armadillo" /**< Connect to a peripheral using a given advertising name here. */
-#define MAX_PEER_COUNT 1            /**< Maximum number of peer's application intends to manage. */
+#define MAX_PEER_COUNT 8            /**< Maximum number of peer's application intends to manage. */
 
 #define BLE_UUID_HEART_RATE_SERVICE          0x180D /**< Heart Rate service UUID. */
 #define BLE_UUID_HEART_RATE_MEASUREMENT_CHAR 0x2A37 /**< Heart Rate Measurement characteristic UUID. */
@@ -105,6 +105,7 @@ enum
 
 #define STRING_BUFFER_SIZE 50
 
+#define ASCII_CONTROL_CHAR 40
 typedef struct
 {
     uint8_t *     p_data;   /**< Pointer to data. */
@@ -122,6 +123,8 @@ static uint16_t    m_hrm_cccd_handle            = 0;
 static bool        m_connection_is_in_progress  = false;
 static bool        m_2m_phy_selected            = false;
 static adapter_t * m_adapter                    = NULL;
+static uint16_t    connection_handles[MAX_PEER_COUNT] = {0};
+static uint8_t     peer_addrs[MAX_PEER_COUNT][STRING_BUFFER_SIZE] = {0};
 
 #if NRF_SD_BLE_API >= 5
 static uint32_t    m_config_id                  = 1;
@@ -419,7 +422,7 @@ static uint32_t ble_cfg_set(uint8_t conn_cfg_tag)
     ble_cfg.gap_cfg.role_count_cfg.adv_set_count        = BLE_GAP_ADV_SET_COUNT_DEFAULT;
 #endif
     ble_cfg.gap_cfg.role_count_cfg.periph_role_count    = 0;
-    ble_cfg.gap_cfg.role_count_cfg.central_role_count   = 1;
+    ble_cfg.gap_cfg.role_count_cfg.central_role_count   = MAX_PEER_COUNT;
     ble_cfg.gap_cfg.role_count_cfg.central_sec_count    = 0;
 
     error_code = sd_ble_cfg_set(m_adapter, BLE_GAP_CFG_ROLE_COUNT, &ble_cfg, ram_start);
@@ -445,7 +448,7 @@ static uint32_t ble_cfg_set(uint8_t conn_cfg_tag)
 #if NRF_SD_BLE_API >= 6
     memset(&ble_cfg, 0, sizeof(ble_cfg));
     ble_cfg.conn_cfg.conn_cfg_tag                     = conn_cfg_tag;
-    ble_cfg.conn_cfg.params.gap_conn_cfg.conn_count   = 1;
+    ble_cfg.conn_cfg.params.gap_conn_cfg.conn_count   = MAX_PEER_COUNT;
     ble_cfg.conn_cfg.params.gap_conn_cfg.event_length = BLE_GAP_EVENT_LENGTH_CODED_PHY_MIN;
 
     error_code = sd_ble_cfg_set(m_adapter, BLE_CONN_CFG_GAP, &ble_cfg, ram_start);
@@ -579,6 +582,22 @@ static uint32_t hrm_cccd_set(uint8_t value)
     return sd_ble_gattc_write(m_adapter, m_connection_handle, &write_params);
 }
 
+static uint32_t rssi_measurements_start()
+{
+    uint8_t threshold    = 2;
+    uint8_t skip_count   = 10;
+    uint32_t err_code;
+
+    err_code = sd_ble_gap_rssi_start(m_adapter, m_connection_handle, threshold, skip_count);
+    if (err_code != NRF_SUCCESS)
+    {
+        printf("RSSI start failed with error code: 0x%X\n", err_code);
+        fflush(stdout);
+    }
+
+    return err_code;
+}
+
 static void update_phy_to_2M(uint16_t conn_handle)
 {
     uint32_t err_code;
@@ -619,6 +638,11 @@ static void on_connected(const ble_gap_evt_t * const p_ble_gap_evt)
     m_connection_is_in_progress = false;
 
     service_discovery_start();
+    rssi_measurements_start();
+    if (m_connected_devices < MAX_PEER_COUNT)
+    {
+        scan_start();
+    }
 }
 
 /**@brief Function called on BLE_GAP_EVT_ADV_REPORT event.
@@ -629,16 +653,17 @@ static void on_connected(const ble_gap_evt_t * const p_ble_gap_evt)
  */
 static void on_adv_report(const ble_gap_evt_t * const p_ble_gap_evt)
 {
+    int8_t rssi_value = 0;
     uint32_t err_code;
     uint8_t  str[STRING_BUFFER_SIZE] = {0};
 
     // Log the Bluetooth device address of advertisement packet received.
     ble_address_to_string_convert(p_ble_gap_evt->params.adv_report.peer_addr, str);
-    printf("Received advertisement report with device address: 0x%s\n", str);
-    fflush(stdout);
-
+    memcpy(peer_addrs[m_connected_devices], str, STRING_BUFFER_SIZE);
     if (find_adv_name(&p_ble_gap_evt->params.adv_report, TARGET_DEV_NAME))
     {
+        rssi_value = p_ble_gap_evt->params.adv_report.rssi;
+        printf("Received advertisement report with device address: 0x%s, RSSI: %d\n", str, rssi_value);
         if (m_connected_devices >= MAX_PEER_COUNT || m_connection_is_in_progress)
         {
             return;
@@ -902,6 +927,28 @@ static void on_exchange_mtu_request(const ble_gatts_evt_t * const p_ble_gatts_ev
     }
 }
 
+static void on_rssi_changed(const ble_gap_evt_t * const p_ble_gap_evt)
+{
+    uint32_t err_code;
+    int8_t p_rssi;
+    uint8_t p_ch_index;
+
+    for(uint8_t i=0;i<=MAX_PEER_COUNT;i++)
+    {
+        if (peer_addrs[i][0]>ASCII_CONTROL_CHAR) //except control code
+        {
+            err_code = sd_ble_gap_rssi_get(m_adapter, connection_handles[i], &p_rssi, &p_ch_index);
+            if (err_code != NRF_SUCCESS)
+            {
+                printf("RSSI start failed with error code: 0x%X\n", err_code);
+                fflush(stdout);
+            }
+            printf("RSSI: %d, ch_index: %d addr: 0X%s\n", p_rssi, p_ch_index, peer_addrs[i]);
+            fflush(stdout);
+        }
+    }
+}
+
 /**@brief Function called on BLE_GATTC_EVT_EXCHANGE_MTU_RSP event.
  *
  * @details Logs the new BLE server RX MTU size.
@@ -945,7 +992,7 @@ static void ble_evt_dispatch(adapter_t * adapter, ble_evt_t * p_ble_evt)
                    p_ble_evt->evt.gap_evt.params.disconnected.reason);
             fflush(stdout);
             m_connected_devices--;
-            m_connection_handle = 0;
+            m_connection_handle--;
             break;
 
         case BLE_GAP_EVT_ADV_REPORT:
@@ -987,6 +1034,11 @@ static void ble_evt_dispatch(adapter_t * adapter, ble_evt_t * p_ble_evt)
 
             fflush(stdout);
             break;
+
+        case BLE_GAP_EVT_RSSI_CHANGED:
+            on_rssi_changed(&(p_ble_evt->evt.gap_evt));
+            break;
+
     #if NRF_SD_BLE_API >= 3
         case BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST:
             on_exchange_mtu_request(&(p_ble_evt->evt.gatts_evt));
