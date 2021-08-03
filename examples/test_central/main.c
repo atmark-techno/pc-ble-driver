@@ -123,6 +123,7 @@ static uint16_t    m_hrm_cccd_handle            = 0;
 static bool        m_connection_is_in_progress  = false;
 static bool        m_2m_phy_selected            = false;
 static bool        is_connected                 = false;
+static bool        do_connect                   = false;
 static adapter_t * m_adapter                    = NULL;
 static uint16_t    connection_handles[MAX_PEER_COUNT] = {0};
 static uint8_t     peer_addrs[MAX_PEER_COUNT][STRING_BUFFER_SIZE] = {0};
@@ -670,22 +671,36 @@ static void on_adv_report(const ble_gap_evt_t * const p_ble_gap_evt)
             return;
         }
 
-        err_code = sd_ble_gap_connect(m_adapter,
-                                      &(p_ble_gap_evt->params.adv_report.peer_addr),
-                                      &m_scan_param,
-                                      &m_connection_param
-#if NRF_SD_BLE_API >= 5
-                                     , m_config_id
-#endif
-                                     );
-        if (err_code != NRF_SUCCESS)
+        if (do_connect)
         {
-            printf("Connection Request Failed, reason %d\n", err_code);
-            fflush(stdout);
-            return;
-        }
+            err_code = sd_ble_gap_connect(m_adapter,
+                                          &(p_ble_gap_evt->params.adv_report.peer_addr),
+                                          &m_scan_param,
+                                          &m_connection_param
+#if NRF_SD_BLE_API >= 5
+                                         , m_config_id
+#endif
+                                         );
 
-        m_connection_is_in_progress = true;
+            if (err_code != NRF_SUCCESS)
+            {
+                printf("Connection Request Failed, reason %d\n", err_code);
+                fflush(stdout);
+                return;
+            }
+
+            m_connection_is_in_progress = true;
+        }
+        else
+        {
+            err_code = sd_ble_gap_scan_start(m_adapter, NULL, &m_adv_report_buffer);
+
+            if (err_code != NRF_SUCCESS)
+            {
+                printf("Scan start failed with error code: %d\n", err_code);
+                fflush(stdout);
+            }
+        }
     }
 #if NRF_SD_BLE_API >= 6
     else {
@@ -1074,10 +1089,11 @@ int main(int argc, char * argv[])
     const struct option longopts[] = {
         {"serial_port", optional_argument, NULL, 's'},
         {"phy", optional_argument, NULL, 'p'},
+        {"connection", no_argument, NULL, 'c'},
         {0, 0, 0, 0},
     };
     int opt, longindex;
-    while ((opt = getopt_long(argc, argv, "s::p::", longopts, &longindex)) != -1)
+    while ((opt = getopt_long(argc, argv, "s::p::c", longopts, &longindex)) != -1)
     {
         switch (opt)
         {
@@ -1102,11 +1118,22 @@ int main(int argc, char * argv[])
                 m_scan_param.scan_phys = BLE_GAP_PHY_CODED;
             }
             break;
+        case 'c':
+            do_connect = true;
+            break;
         default:
             break;
         }
     }
 
+    if (do_connect)
+    {
+        printf("test with connection\n");
+    }
+    else
+    {
+        printf("test without connection\n");
+    }
     switch (m_scan_param.scan_phys)
     {
     case BLE_GAP_PHY_1MBPS:
