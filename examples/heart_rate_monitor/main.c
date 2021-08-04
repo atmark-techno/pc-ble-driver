@@ -108,7 +108,7 @@
 #define HEART_RATE_LIMIT    190
 
 #define BUFFER_SIZE 30           /**< Sufficiently large buffer for the advertising data.  */
-#define DEVICE_NAME "Nordic_HRM" /**< Name device advertises as over Bluetooth. */
+#define DEVICE_NAME "test_armadillo" /**< Name device advertises as over Bluetooth. */
 
 #ifndef GATT_MTU_SIZE_DEFAULT
 #define GATT_MTU_SIZE_DEFAULT BLE_GATT_ATT_MTU_DEFAULT

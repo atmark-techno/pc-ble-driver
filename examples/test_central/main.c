@@ -105,13 +105,17 @@ enum
 
 #define STRING_BUFFER_SIZE 50
 
-#define ASCII_CONTROL_CHAR 40
 typedef struct
 {
     uint8_t *     p_data;   /**< Pointer to data. */
     uint16_t      data_len; /**< Length of data. */
 } data_t;
 
+typedef struct
+{
+    uint16_t      connection_handle;
+    char          peer_addr[STRING_BUFFER_SIZE];
+} connect_t;
 
 /** Global variables */
 static uint8_t     m_connected_devices          = 0;
@@ -125,8 +129,8 @@ static bool        m_2m_phy_selected            = false;
 static bool        is_connected                 = false;
 static bool        do_connect                   = false;
 static adapter_t * m_adapter                    = NULL;
-static uint16_t    connection_handles[MAX_PEER_COUNT] = {0};
-static uint8_t     peer_addrs[MAX_PEER_COUNT][STRING_BUFFER_SIZE] = {0};
+static connect_t   m_connect[MAX_PEER_COUNT];
+static char        peer_addr[STRING_BUFFER_SIZE]= {0};
 
 #if NRF_SD_BLE_API >= 5
 static uint32_t    m_config_id                  = 1;
@@ -559,31 +563,6 @@ static uint32_t descr_discovery_start()
     return sd_ble_gattc_descriptors_discover(m_adapter, m_connection_handle, &handle_range);
 }
 
-/**@brief Function that write's the HRM characteristic's CCCD.
- * *
- * @return NRF_SUCCESS on success, otherwise an error code.
- */
-static uint32_t hrm_cccd_set(uint8_t value)
-{
-    ble_gattc_write_params_t write_params;
-    uint8_t                  cccd_value[2] = {value, 0};
-
-    if (m_hrm_cccd_handle == 0)
-    {
-        printf("Error. No CCCD handle has been found\n");
-        fflush(stdout);
-        return NRF_ERROR_INVALID_STATE;
-    }
-
-    write_params.handle     = m_hrm_cccd_handle;
-    write_params.len        = 2;
-    write_params.p_value    = cccd_value;
-    write_params.write_op   = BLE_GATT_OP_WRITE_REQ;
-    write_params.offset     = 0;
-
-    return sd_ble_gattc_write(m_adapter, m_connection_handle, &write_params);
-}
-
 static uint32_t rssi_measurements_start()
 {
     uint8_t threshold    = 2;
@@ -637,6 +616,8 @@ static void on_connected(const ble_gap_evt_t * const p_ble_gap_evt)
 
     m_connected_devices++;
     m_connection_handle         = p_ble_gap_evt->conn_handle;
+    m_connect[m_connection_handle].connection_handle = p_ble_gap_evt->conn_handle;
+    strcpy(m_connect[p_ble_gap_evt->conn_handle].peer_addr, peer_addr);
     m_connection_is_in_progress = false;
 
     service_discovery_start();
@@ -646,6 +627,19 @@ static void on_connected(const ble_gap_evt_t * const p_ble_gap_evt)
         scan_start();
     }
 }
+
+static void on_disconnected(const ble_gap_evt_t * const p_ble_gap_evt)
+{
+    printf("peripheral handle 0x%x disconnected (reason: 0x%x)\n",
+            p_ble_gap_evt->conn_handle,
+            p_ble_gap_evt->params.disconnected.reason);
+    fflush(stdout);
+    m_connected_devices--;
+    fflush(stdout);
+    m_connect[p_ble_gap_evt->conn_handle].connection_handle = 0;
+    m_connect[p_ble_gap_evt->conn_handle].peer_addr[0] = '\0';
+}
+
 
 /**@brief Function called on BLE_GAP_EVT_ADV_REPORT event.
  *
@@ -661,7 +655,7 @@ static void on_adv_report(const ble_gap_evt_t * const p_ble_gap_evt)
 
     // Log the Bluetooth device address of advertisement packet received.
     ble_address_to_string_convert(p_ble_gap_evt->params.adv_report.peer_addr, str);
-    memcpy(peer_addrs[m_connected_devices], str, STRING_BUFFER_SIZE);
+    memcpy(peer_addr, str, STRING_BUFFER_SIZE);
     if (find_adv_name(&p_ble_gap_evt->params.adv_report, TARGET_DEV_NAME))
     {
         rssi_value = p_ble_gap_evt->params.adv_report.rssi;
@@ -948,17 +942,17 @@ static void on_rssi_changed(const ble_gap_evt_t * const p_ble_gap_evt)
     int8_t p_rssi;
     uint8_t p_ch_index;
 
-    for(uint8_t i=0;i<=MAX_PEER_COUNT;i++)
+    for(uint8_t i=0;i<MAX_PEER_COUNT;i++)
     {
-        if (peer_addrs[i][0]>ASCII_CONTROL_CHAR) //except control code
+        if (m_connect[i].peer_addr[0] != '\0')
         {
-            err_code = sd_ble_gap_rssi_get(m_adapter, connection_handles[i], &p_rssi, &p_ch_index);
+            err_code = sd_ble_gap_rssi_get(m_adapter, m_connect[i].connection_handle, &p_rssi, &p_ch_index);
             if (err_code != NRF_SUCCESS)
             {
                 printf("RSSI start failed with error code: 0x%X\n", err_code);
                 fflush(stdout);
             }
-            printf("RSSI: %d, ch_index: %d addr: 0X%s\n", p_rssi, p_ch_index, peer_addrs[i]);
+            printf("RSSI: %d, ch_index: %2d addr: 0x%s\n", p_rssi, p_ch_index, m_connect[i].peer_addr);
             fflush(stdout);
         }
     }
@@ -1003,11 +997,7 @@ static void ble_evt_dispatch(adapter_t * adapter, ble_evt_t * p_ble_evt)
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
-            printf("Disconnected, reason: 0x%02X\n",
-                   p_ble_evt->evt.gap_evt.params.disconnected.reason);
-            fflush(stdout);
-            m_connected_devices--;
-            m_connection_handle--;
+            on_disconnected(&(p_ble_evt->evt.gap_evt));
             break;
 
         case BLE_GAP_EVT_ADV_REPORT:
@@ -1084,7 +1074,6 @@ int main(int argc, char * argv[])
     uint32_t error_code;
     char *   serial_port = DEFAULT_UART_PORT_NAME;
     uint32_t baud_rate = DEFAULT_BAUD_RATE;
-    uint8_t  cccd_value = 0;
 
     const struct option longopts[] = {
         {"serial_port", optional_argument, NULL, 's'},
@@ -1152,6 +1141,9 @@ int main(int argc, char * argv[])
         break;
     }
 
+    m_connect->connection_handle = 0;
+    m_connect->peer_addr[0] = '\0';
+
     printf("Serial port used: %s\n", serial_port);
     printf("Baud rate used: %d\n", baud_rate);
     fflush(stdout);
@@ -1197,15 +1189,5 @@ int main(int argc, char * argv[])
     // Endlessly loop.
     for (;;)
     {
-        if (is_connected)
-        {
-            for (uint8_t i = 0; i < 2; i++)
-            {
-                // Toggle notifications on the HRM characteristic every time user input is received.
-                cccd_value ^= BLE_CCCD_NOTIFY;
-                hrm_cccd_set(cccd_value);
-            }
-            is_connected = false;
-        }
     }
 }
