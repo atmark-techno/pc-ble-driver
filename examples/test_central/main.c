@@ -619,6 +619,7 @@ static void on_connected(const ble_gap_evt_t * const p_ble_gap_evt)
     m_connect[m_connection_handle].connection_handle = p_ble_gap_evt->conn_handle;
     strcpy(m_connect[p_ble_gap_evt->conn_handle].peer_addr, peer_addr);
     m_connection_is_in_progress = false;
+    printf("CONNECTED DEVICES: %d\n", m_connected_devices);
 
     service_discovery_start();
     rssi_measurements_start();
@@ -630,11 +631,14 @@ static void on_connected(const ble_gap_evt_t * const p_ble_gap_evt)
 
 static void on_disconnected(const ble_gap_evt_t * const p_ble_gap_evt)
 {
+    printf("\n\n=============\n\n");
+    printf("DISCONNECTED\n");
     printf("peripheral handle 0x%x disconnected (reason: 0x%x)\n",
             p_ble_gap_evt->conn_handle,
             p_ble_gap_evt->params.disconnected.reason);
-    fflush(stdout);
     m_connected_devices--;
+    printf("CONNECTED DEVICES: %d\n", m_connected_devices);
+    printf("\n\n=============\n\n");
     fflush(stdout);
     m_connect[p_ble_gap_evt->conn_handle].connection_handle = 0;
     m_connect[p_ble_gap_evt->conn_handle].peer_addr[0] = '\0';
@@ -1060,7 +1064,6 @@ static void ble_evt_dispatch(adapter_t * adapter, ble_evt_t * p_ble_evt)
             break;
     }
 }
-
 
 /** Main */
 
