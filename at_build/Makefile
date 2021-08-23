@@ -25,16 +25,16 @@ examples:
 
 build: $(TARGETS)
 
-heart_rate_monitor: objects/libnrf-ble-driver-sd_api_v6.a examples/monitor.c.o
+heart_rate_monitor: objects examples objects/libnrf-ble-driver-sd_api_v6.a examples/monitor.c.o
 	$(CPP) -g examples/monitor.c.o -o heart_rate_monitor objects/libnrf-ble-driver-sd_api_v6.a -lpthread -ludev
 
-heart_rate_collector: objects/libnrf-ble-driver-sd_api_v6.a examples/collector.c.o
+heart_rate_collector: objects examples objects/libnrf-ble-driver-sd_api_v6.a examples/collector.c.o
 	$(CPP) -g examples/collector.c.o -o heart_rate_collector objects/libnrf-ble-driver-sd_api_v6.a -lpthread -ludev
 
-test_peripheral: objects/libnrf-ble-driver-sd_api_v6.a examples/test_peripheral.c.o
+test_peripheral: objects examples objects/libnrf-ble-driver-sd_api_v6.a examples/test_peripheral.c.o
 	$(CPP) -g examples/test_peripheral.c.o -o test_peripheral objects/libnrf-ble-driver-sd_api_v6.a -lpthread -ludev
 
-test_central: objects/libnrf-ble-driver-sd_api_v6.a examples/test_central.c.o
+test_central: objects examples objects/libnrf-ble-driver-sd_api_v6.a examples/test_central.c.o
 	$(CPP) -g examples/test_central.c.o -o test_central objects/libnrf-ble-driver-sd_api_v6.a -lpthread -ludev
 
 objects/libnrf-ble-driver-sd_api_v6.a:
@@ -57,4 +57,4 @@ clean:
 	-rm -rf $(TARGETS) examples/*
 
 dist-clean:
-	-rm -rf $(TARGETS) examples/* objects/*
+	-rm -rf $(TARGETS) examples objects
