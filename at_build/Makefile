@@ -3,7 +3,8 @@ CROSS_COMPILE =
 TARGETS = heart_rate_monitor \
 		  heart_rate_collector \
 		  test_peripheral \
-		  test_central
+		  test_central \
+		  test_throughput
 
 ifeq ($(CROSS_COMPILE), arm-linux-gnueabihf-)
 	CPP = /usr/bin/arm-linux-gnueabihf-g++
@@ -37,6 +38,9 @@ test_peripheral: objects examples objects/libnrf-ble-driver-sd_api_v6.a examples
 test_central: objects examples objects/libnrf-ble-driver-sd_api_v6.a examples/test_central.c.o
 	$(CPP) -g examples/test_central.c.o -o test_central objects/libnrf-ble-driver-sd_api_v6.a -lpthread -ludev
 
+test_throughput: objects examples objects/libnrf-ble-driver-sd_api_v6.a examples/test_throughput.c.o
+	$(CPP) -g examples/test_throughput.c.o examples/amts.c.o examples/amtc.c.o -o test_throughput objects/libnrf-ble-driver-sd_api_v6.a -lpthread -ludev
+
 objects/libnrf-ble-driver-sd_api_v6.a:
 	$(MAKE) CROSS_COMPILE=$(CROSS_COMPILE) -f src.make build
 	$(MAKE) -f libnrf-ble-driver.make build
@@ -52,6 +56,9 @@ examples/test_peripheral.c.o:
 
 examples/test_central.c.o:
 	$(MAKE) CROSS_COMPILE=$(CROSS_COMPILE) -f test_central.make build
+
+examples/test_throughput.c.o: ../examples/test_throughput/main.c
+	$(MAKE) CROSS_COMPILE=$(CROSS_COMPILE) -f test_throughput.make build
 
 clean:
 	-rm -rf $(TARGETS) examples/*
